@@ -29,6 +29,8 @@ ifeq ($(LAB2GE),1)
 endif
 LDLIBS += $(shell test -f `gcc -print-file-name=librt.so` && echo -lrt)
 LDLIBS += $(shell test -f `gcc -print-file-name=libdl.so` && echo -ldl)
+# CC = g++
+# CXX = g++
 CC = g++
 CXX = g++
 
