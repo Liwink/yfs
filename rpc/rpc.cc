@@ -70,6 +70,7 @@
 #include <time.h>
 #include <netdb.h>
 #include <unistd.h>
+#include <list>
 
 #include "jsl_log.h"
 #include "gettime.h"
@@ -578,6 +579,7 @@ rpcs::dispatch(djob_t *j)
 
 		stat = checkduplicate_and_update(h.clt_nonce, h.xid,
                                                  h.xid_rep, &b1, &sz1);
+//	    printf("clt_nonce: %d, xid: %d, xid_rep: %d, stat: %d\n", h.clt_nonce, h.xid, h.xid_rep, stat);
 	} else {
 		// this client does not require at most once logic
 		stat = NEW;
@@ -663,7 +665,47 @@ rpcs::checkduplicate_and_update(unsigned int clt_nonce, unsigned int xid,
 {
 	ScopedLock rwl(&reply_window_m_);
 
-        // You fill this in for Lab 1.
+	// You fill this in for Lab 1.
+
+	// todo: meaning of xid_rep
+
+//	printf("reply_window size: %ld\n", reply_window_.size());
+	auto window = reply_window_.find(clt_nonce);
+//	if (window == reply_window_.end()) {
+//		reply_window_.insert(std::make_pair(clt_nonce, std::list<reply_t>()));
+//		printf("1\n");
+//		return NEW;
+//	}
+
+
+	std::list<reply_t> &items = window->second;
+	auto i = items.begin();
+	while (i != items.end()) {
+		reply_t &reply = *i;
+
+		// deletes remembered requests with XIDs <= xid_rep;
+		if (reply.xid < xid_rep) {
+			free(reply.buf);
+			items.erase(i++);
+		} else if (reply.xid == xid) {
+			if (reply.cb_present) {
+				*sz = reply.sz;
+				*b = reply.buf;
+				return DONE;
+			} else {
+				return INPROGRESS;
+			}
+		} else if (reply.xid > xid) {
+			if (reply.cb_present) {
+				return FORGOTTEN;
+			}
+			break;
+		} else {
+			i++;
+		}
+	}
+
+	items.insert(i, reply_t(xid));
 	return NEW;
 }
 
@@ -677,7 +719,22 @@ rpcs::add_reply(unsigned int clt_nonce, unsigned int xid,
 		char *b, int sz)
 {
 	ScopedLock rwl(&reply_window_m_);
-        // You fill this in for Lab 1.
+	// You fill this in for Lab 1.
+
+	for (reply_t& reply : reply_window_[clt_nonce]) {
+		if (reply.xid != xid) {
+			continue;
+		}
+		reply.cb_present = true;
+		reply.buf = new char[sz];
+		// how to copy char*
+		for (auto i = 0; i < sz; i++) {
+			reply.buf[i] = b[i];
+		}
+		reply.sz = sz;
+		break;
+	}
+
 }
 
 void
