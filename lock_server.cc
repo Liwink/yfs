@@ -24,19 +24,17 @@ lock_protocol::status
 lock_server::acquire(int clt, lock_protocol::lockid_t lid, int &r)
 {
   lock_protocol::status ret = lock_protocol::OK;
-  printf("acquire request from clt %d\n", clt);
+  // printf("acquire %lld request from clt %d\n", lid, clt);
 
-  m.lock();
+  std::unique_lock<std::mutex> ul(m);
 
-  auto it = locked.find(clt);
-  while (it != locked.end()) {
-    std::unique_lock<std::mutex> ul(m);
+  while (locked.find(lid) != locked.end()) {
     cond.wait(ul);
   }
 
+  // printf("DONE: acquire %lld request from clt %d\n", lid, clt);
   locked.insert(lid);
 
-  m.unlock();
   return ret;
 }
 
@@ -44,12 +42,15 @@ lock_protocol::status
 lock_server::release(int clt, lock_protocol::lockid_t lid, int &r)
 {
   lock_protocol::status ret = lock_protocol::OK;
-  printf("release request from clt %d\n", clt);
+  // printf("release %lld request from clt %d\n", lid, clt);
 
-  m.lock();
+  std::unique_lock<std::mutex> ul(m);
+
   locked.erase(lid);
+
   cond.notify_all();
-  m.unlock();
+
+  // printf("DONE: release %lld request from clt %d\n", lid, clt);
   return ret;
 }
 
