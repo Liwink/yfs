@@ -70,6 +70,78 @@ yfs_client::getfile(inum inum, fileinfo &fin)
   return r;
 }
 
+unsigned long
+dircontainfile(const std::string &dir, const char *filename)
+{
+  std::string key(filename);
+  std::size_t pos = dir.find("<" + key + "|");
+  if (pos == std::string::npos) {
+    return 0;
+  }
+  pos += 2 + key.size();
+  int len = 1;
+  while(dir[pos + len + 1] == '>') {
+    len += 1;
+  }
+
+  return static_cast<unsigned long>(std::stoi(dir.substr(pos, len)));
+}
+
+void
+diraddfile(std::string &dir, const char *filename, yfs_client::inum ino)
+{
+  dir.append("<");
+  dir.append(filename);
+  dir.append("|");
+  dir.append(std::to_string(ino));
+  dir.append(">");
+}
+
+unsigned long
+yfs_client::lookup(inum parentnum, const char *filename)
+{
+  std::string buf;
+  if (ec->get(parentnum, buf) != extent_protocol::OK) {
+    return false;
+  }
+
+  return dircontainfile(buf, filename);
+}
+
+int
+yfs_client::createfile(inum parentnum, const char *filename, unsigned long &filenum)
+{
+  std::cout << "createfile: " << parentnum << ", " << filename << std::endl;
+
+  std::string buf;
+  if (ec->get(parentnum, buf) != extent_protocol::OK) {
+    if (parentnum == 1) {
+      buf = "";
+    } else {
+      return IOERR;
+    }
+  }
+
+  if (dircontainfile(buf, filename) != 0) {
+    return EXIST;
+  }
+
+  // generate a inum for new file
+  inum ino = static_cast<inum>(random());
+  ino |= 0x80000000;
+
+  filenum = static_cast<unsigned long>(ino);
+
+  diraddfile(buf, filename, ino);
+
+  ec->put(parentnum, buf);
+  ec->put(ino, "");
+
+  std::cout << "buf: " << buf << std::endl;
+
+  return OK;
+}
+
 int
 yfs_client::getdir(inum inum, dirinfo &din)
 {

@@ -22,12 +22,15 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
   std::unique_lock<std::mutex> lock(m);
 
   store[id] = buf;
-  attr_store[id] = extent_protocol::attr {
-    time(),
-    time(),
-    time(),
-    0
+  extent_protocol::attr a = {
+          time(),
+          time(),
+          time(),
+          0
   };
+  attr_store[id] = a;
+
+  std::cout << "put: " << id << ", " << buf << std::endl;
   return extent_protocol::OK;
 }
 
@@ -41,6 +44,8 @@ int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
   }
   buf = store[id];
   attr_store[id].atime = time();
+
+  std::cout << "get: " << id << ", " << buf << std::endl;
   return extent_protocol::OK;
 }
 

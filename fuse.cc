@@ -215,12 +215,20 @@ yfs_client::status
 fuseserver_createhelper(fuse_ino_t parent, const char *name,
                         mode_t mode, struct fuse_entry_param *e)
 {
+  printf("fuseserver_createhelper\n");
+
   // In yfs, timeouts are always set to 0.0, and generations are always set to 0
   e->attr_timeout = 0.0;
   e->entry_timeout = 0.0;
   e->generation = 0;
   // You fill this in for Lab 2
-  return yfs_client::NOENT;
+
+  auto s = yfs->createfile(parent, name, e->ino);
+  if (s == yfs_client::OK) {
+    // attr is required
+    getattr(e->ino, e->attr);
+  }
+  return s;
 }
 
 void
@@ -268,13 +276,21 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
   e.attr_timeout = 0.0;
   e.entry_timeout = 0.0;
   e.generation = 0;
-  bool found = false;
 
   // You fill this in for Lab 2
-  if (found)
+
+
+  e.ino = yfs->lookup(parent, name);
+
+  std::cout << "fuseserver_lookup: " << parent << ", " << name << "," << e.ino << std::endl;
+
+  if (e.ino != 0) {
+//    e.ino
+    getattr(e.ino, e.attr);
     fuse_reply_entry(req, &e);
-  else
+  } else {
     fuse_reply_err(req, ENOENT);
+  }
 }
 
 
