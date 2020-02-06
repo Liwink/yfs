@@ -21,7 +21,8 @@ ifeq ($(LAB2GE),1)
     ifeq ($(shell sw_vers -productVersion | sed -e "s/.*\(10\.[0-9]\).*/\1/"),10.6)
       LDLIBS += -lfuse_ino64
     else
-      LDLIBS += -lfuse
+      # LDLIBS += -lfuse
+      LDLIBS += -losxfuse
     endif
   else
     LDLIBS += -lfuse
