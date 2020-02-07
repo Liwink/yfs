@@ -80,11 +80,11 @@ dircontainfile(const std::string &dir, const char *filename)
   }
   pos += 2 + key.size();
   int len = 1;
-  while(dir[pos + len + 1] == '>') {
+  while(dir[pos + len] != '>') {
     len += 1;
   }
 
-  return static_cast<unsigned long>(std::stoi(dir.substr(pos, len)));
+  return static_cast<unsigned long>(std::stol(dir.substr(pos, len)));
 }
 
 void
@@ -102,8 +102,9 @@ yfs_client::lookup(inum parentnum, const char *filename)
 {
   std::string buf;
   if (ec->get(parentnum, buf) != extent_protocol::OK) {
-    return false;
+    return 0;
   }
+  std::cout << "buf: " << buf << std::endl;
 
   return dircontainfile(buf, filename);
 }
