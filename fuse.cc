@@ -45,7 +45,7 @@ getattr(yfs_client::inum inum, struct stat &st)
   bzero(&st, sizeof(st));
 
   st.st_ino = inum;
-  printf("getattr %016llx %d\n", inum, yfs->isfile(inum));
+//  printf("getattr %016llx %d\n", inum, yfs->isfile(inum));
   if(yfs->isfile(inum)){
      yfs_client::fileinfo info;
      ret = yfs->getfile(inum, info);
@@ -57,7 +57,7 @@ getattr(yfs_client::inum inum, struct stat &st)
      st.st_mtime = info.mtime;
      st.st_ctime = info.ctime;
      st.st_size = info.size;
-     printf("   getattr -> %llu\n", info.size);
+//     printf("   getattr -> %llu\n", info.size);
    } else {
      yfs_client::dirinfo info;
      ret = yfs->getdir(inum, info);
@@ -68,7 +68,7 @@ getattr(yfs_client::inum inum, struct stat &st)
      st.st_atime = info.atime;
      st.st_mtime = info.mtime;
      st.st_ctime = info.ctime;
-     printf("   getattr -> %lu %lu %lu\n", info.atime, info.mtime, info.ctime);
+//     printf("   getattr -> %lu %lu %lu\n", info.atime, info.mtime, info.ctime);
    }
    return yfs_client::OK;
 }
@@ -126,13 +126,16 @@ fuseserver_setattr(fuse_req_t req, fuse_ino_t ino, struct stat *attr,
     printf("   fuseserver_setattr set size to %zu\n", attr->st_size);
     struct stat st;
     // You fill this in for Lab 2
-#if 0
-    // Change the above line to "#if 1", and your code goes here
     // Note: fill st using getattr before fuse_reply_attr
+
+    std::string doc;
+
+    yfs->readfile(ino, doc);
+    doc.resize(attr->st_size, '\0');
+    yfs->writefile(ino, doc);
+
+    getattr(ino, st);
     fuse_reply_attr(req, &st, 0);
-#else
-    fuse_reply_err(req, ENOSYS);
-#endif
   } else {
     fuse_reply_err(req, ENOSYS);
   }
@@ -155,13 +158,15 @@ fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size,
                 off_t off, struct fuse_file_info *fi)
 {
   // You fill this in for Lab 2
-#if 0
-  std::string buf;
-  // Change the above "#if 0" to "#if 1", and your code goes here
+  std::string doc;
+  std::string buf = doc.substr(off, size);
+  yfs->readfile(ino, doc);
+
+  if (off < doc.size()) {
+    buf = doc.substr(off, size);
+  }
+  printf("fuseserver_read-  buf: %s, off: %lld, size: %ld\n", buf.c_str(), off, size);
   fuse_reply_buf(req, buf.data(), buf.size());
-#else
-  fuse_reply_err(req, ENOSYS);
-#endif
 }
 
 //
@@ -185,12 +190,26 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
                  struct fuse_file_info *fi)
 {
   // You fill this in for Lab 2
-#if 0
-  // Change the above line to "#if 1", and your code goes here
-  fuse_reply_write(req, size);
-#else
-  fuse_reply_err(req, ENOSYS);
-#endif
+  std::string doc;
+
+  printf("fuseserver_write-  buf: %s, off: %lld, size: %ld\n", buf, off, size);
+
+  yfs->readfile(ino, doc);
+
+  std::cout << "old doc: " << doc << std::endl;
+
+  if (off >= doc.size()) {
+      doc.append(std::string(doc.size() - off + 1, '\0'));
+  }
+
+  doc.replace(doc.begin() + off, doc.end(), buf, size);
+
+  std::cout << "new doc: " << doc << std::endl;
+
+  yfs->writefile(ino, doc);
+
+//  fuse_reply_write(req, size);
+  fuse_reply_write(req, doc.size());
 }
 
 //

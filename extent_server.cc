@@ -26,11 +26,11 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
           time(),
           time(),
           time(),
-          0
+          static_cast<unsigned int>(buf.size())
   };
   attr_store[id] = a;
 
-  std::cout << "put: " << id << ", " << buf << std::endl;
+//  std::cout << "put: " << id << ", " << buf << std::endl;
   return extent_protocol::OK;
 }
 
@@ -45,7 +45,7 @@ int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
   buf = store[id];
   attr_store[id].atime = time();
 
-  std::cout << "get: " << id << ", " << buf << std::endl;
+//  std::cout << "get: " << id << ", " << buf << std::endl;
   return extent_protocol::OK;
 }
 

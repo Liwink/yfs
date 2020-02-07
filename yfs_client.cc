@@ -49,11 +49,29 @@ yfs_client::isdir(inum inum)
 }
 
 int
+yfs_client::readfile(inum ino, std::string &buf)
+{
+  if (ec->get(ino, buf) != extent_protocol::OK) {
+      return IOERR;
+  }
+  return OK;
+}
+
+int
+yfs_client::writefile(inum ino, std::string &buf)
+{
+  if (ec->put(ino, buf) != extent_protocol::OK) {
+      return IOERR;
+  }
+  return OK;
+}
+
+int
 yfs_client::getfile(inum inum, fileinfo &fin)
 {
   int r = OK;
 
-  printf("getfile %016llx\n", inum);
+//  printf("getfile %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
     r = IOERR;
@@ -64,7 +82,7 @@ yfs_client::getfile(inum inum, fileinfo &fin)
   fin.mtime = a.mtime;
   fin.ctime = a.ctime;
   fin.size = a.size;
-  printf("getfile %016llx -> sz %llu\n", inum, fin.size);
+//  printf("getfile %016llx -> sz %llu\n", inum, fin.size);
 
  release:
 
@@ -170,7 +188,7 @@ yfs_client::getdir(inum inum, dirinfo &din)
 {
   int r = OK;
 
-  printf("getdir %016llx\n", inum);
+//  printf("getdir %016llx\n", inum);
   extent_protocol::attr a;
   if (ec->getattr(inum, a) != extent_protocol::OK) {
     r = IOERR;
