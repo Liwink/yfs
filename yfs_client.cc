@@ -8,6 +8,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <unordered_map>
 
 
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
@@ -70,6 +71,19 @@ yfs_client::getfile(inum inum, fileinfo &fin)
   return r;
 }
 
+void
+parsedir(const std::string &dir, std::unordered_map<std::string, unsigned long> &files)
+{
+  std::size_t start = 1;
+  std::size_t end;
+  while ((end = dir.find('>', start)) != std::string::npos) {
+    auto tmp = dir.substr(start, end -  start);
+    auto pos = tmp.find('|');
+    files[tmp.substr(0, pos)] = std::stol(tmp.substr(pos + 1, tmp.size() - pos - 1));
+    start = end + 2;
+  }
+}
+
 unsigned long
 dircontainfile(const std::string &dir, const char *filename)
 {
@@ -85,6 +99,17 @@ dircontainfile(const std::string &dir, const char *filename)
   }
 
   return static_cast<unsigned long>(std::stol(dir.substr(pos, len)));
+}
+
+void
+yfs_client::readdir(inum parent, std::unordered_map<std::string, unsigned long> &files)
+{
+  std::string buf;
+  if (ec->get(parent, buf) != extent_protocol::OK) {
+    return;
+  }
+
+  parsedir(buf, files);
 }
 
 void
@@ -104,7 +129,6 @@ yfs_client::lookup(inum parentnum, const char *filename)
   if (ec->get(parentnum, buf) != extent_protocol::OK) {
     return 0;
   }
-  std::cout << "buf: " << buf << std::endl;
 
   return dircontainfile(buf, filename);
 }
@@ -137,8 +161,6 @@ yfs_client::createfile(inum parentnum, const char *filename, unsigned long &file
 
   ec->put(parentnum, buf);
   ec->put(ino, "");
-
-  std::cout << "buf: " << buf << std::endl;
 
   return OK;
 }

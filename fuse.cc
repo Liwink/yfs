@@ -348,7 +348,12 @@ fuseserver_readdir(fuse_req_t req, fuse_ino_t ino, size_t size,
 
 
   // You fill this in for Lab 2
-
+  std::unordered_map<std::string, fuse_ino_t> files;
+  yfs->readdir(inum, files);
+//  std::cout << "files size: " << files.size() << files.begin()->first << ": " << files.begin()->second << std::endl;
+  for (auto const& file : files) {
+      dirbuf_add(&b, file.first.c_str(), file.second);
+  }
 
   reply_buf_limited(req, b.p, b.size, off, size);
   free(b.p);

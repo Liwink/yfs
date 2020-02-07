@@ -5,6 +5,7 @@
 //#include "yfs_protocol.h"
 #include "extent_client.h"
 #include <vector>
+#include <unordered_map>
 
 
 class yfs_client {
@@ -46,6 +47,7 @@ class yfs_client {
 
   int createfile(inum, const char*, unsigned long&);
   unsigned long lookup(inum parentnum, const char *filename);
+  void readdir(inum parent, std::unordered_map<std::string, unsigned long> &files);
 };
 
 #endif 
