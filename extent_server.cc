@@ -30,7 +30,7 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
   };
   attr_store[id] = a;
 
-//  std::cout << "put: " << id << ", " << buf << std::endl;
+  std::cout << "put: " << id << ", " << buf << std::endl;
   return extent_protocol::OK;
 }
 

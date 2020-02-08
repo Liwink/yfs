@@ -159,14 +159,16 @@ fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size,
 {
   // You fill this in for Lab 2
   std::string doc;
-  std::string buf = doc.substr(off, size);
+//  std::string buf = doc.substr(off, size);
   yfs->readfile(ino, doc);
+  std::string buf = doc;
 
   if (off < doc.size()) {
     buf = doc.substr(off, size);
   }
   printf("fuseserver_read-  buf: %s, off: %lld, size: %ld\n", buf.c_str(), off, size);
   fuse_reply_buf(req, buf.data(), buf.size());
+//  fuse_reply_buf(req, buf.data(), buf.size());
 }
 
 //
@@ -202,14 +204,14 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
       doc.append(std::string(doc.size() - off + 1, '\0'));
   }
 
-  doc.replace(doc.begin() + off, doc.end(), buf, size);
+  doc.replace(doc.begin() + off, doc.begin() + off + size, buf, size);
 
   std::cout << "new doc: " << doc << std::endl;
 
   yfs->writefile(ino, doc);
 
 //  fuse_reply_write(req, size);
-  fuse_reply_write(req, doc.size());
+  fuse_reply_write(req, size);
 }
 
 //
@@ -301,11 +303,11 @@ fuseserver_lookup(fuse_req_t req, fuse_ino_t parent, const char *name)
 
   e.ino = yfs->lookup(parent, name);
 
-  std::cout << "fuseserver_lookup: " << parent << ", " << name << "," << e.ino << std::endl;
 
   if (e.ino != 0) {
 //    e.ino
     getattr(e.ino, e.attr);
+    std::cout << "fuseserver_lookup: " << parent << ", " << name << "," << e.ino << "size: " << e.attr.st_size << std::endl;
     fuse_reply_entry(req, &e);
   } else {
     fuse_reply_err(req, ENOENT);
