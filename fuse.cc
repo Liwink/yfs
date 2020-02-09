@@ -163,6 +163,13 @@ fuseserver_read(fuse_req_t req, fuse_ino_t ino, size_t size,
   yfs->readfile(ino, doc);
   std::string buf = doc;
 
+  // FIXME: HACK: Sooooo wield! It's for out-of-range seek on MacOS
+  if (off + size > doc.size()) {
+      doc.append(std::string(off + size - doc.size(), '\0'));
+      // std::cout << "!!!!!" << doc << std::endl;
+      // doc.replace(off, size, buf);
+      yfs->writefile(ino, doc);
+  }
   if (off < doc.size()) {
     buf = doc.substr(off, size);
   }
