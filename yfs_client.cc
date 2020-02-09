@@ -122,6 +122,27 @@ dircontainfile(const std::string &dir, const char *filename)
   return static_cast<unsigned long>(std::stol(dir.substr(pos, len)));
 }
 
+unsigned long
+dirunlinkfile(std::string &dir, const char *filename)
+{
+  std::string key(filename);
+  std::size_t pos = dir.find("<" + key + "|");
+  if (pos == std::string::npos) {
+    return 0;
+  }
+  pos += 2 + key.size();
+  int len = 1;
+  while(dir[pos + len] != '>') {
+    len += 1;
+  }
+
+  auto ino = static_cast<unsigned long>(std::stol(dir.substr(pos, len)));
+
+  dir.erase(pos - key.size() - 2, key.size() + len + 3);
+
+  return ino;
+}
+
 void
 yfs_client::readdir(inum parent, std::unordered_map<std::string, unsigned long> &files)
 {
@@ -155,7 +176,37 @@ yfs_client::lookup(inum parentnum, const char *filename)
 }
 
 int
-yfs_client::createfile(inum parentnum, const char *filename, unsigned long &filenum)
+yfs_client::unlink(inum parentnum, const char *filename)
+{
+  std::cout << "unlink: " << parentnum << ", " << filename << std::endl;
+
+  // 1. find the ino
+  // 2. remove file from dir
+  // 3. remove from extend_server
+
+  std::string buf;
+  if (ec->get(parentnum, buf) != extent_protocol::OK) {
+    return IOERR;
+  }
+
+  auto ino = dirunlinkfile(buf, filename);
+  if (ino == 0) {
+    return ENOSYS;
+  }
+  if (ec->put(parentnum, buf) != extent_protocol::OK) {
+    return IOERR;
+  }
+
+  if (ec->remove(ino) != extent_protocol::OK) {
+    return IOERR;
+  }
+
+  return OK;
+}
+
+int
+yfs_client::createfile(inum parentnum, const char *filename,
+        unsigned long &filenum, bool isdir)
 {
   std::cout << "createfile: " << parentnum << ", " << filename << std::endl;
 
@@ -174,7 +225,11 @@ yfs_client::createfile(inum parentnum, const char *filename, unsigned long &file
 
   // generate a inum for new file
   inum ino = static_cast<inum>(random());
-  ino |= 0x80000000;
+  if (isdir) {
+    ino &= ~0x80000000;
+  } else {
+    ino |= 0x80000000;
+  }
 
   filenum = static_cast<unsigned long>(ino);
 

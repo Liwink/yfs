@@ -47,11 +47,12 @@ class yfs_client {
   int getfile(inum, fileinfo &);
   int getdir(inum, dirinfo &);
 
-  int createfile(inum, const char*, unsigned long&);
+  int createfile(inum, const char*, unsigned long&, bool);
   unsigned long lookup(inum parentnum, const char *filename);
   void readdir(inum parent, std::unordered_map<std::string, unsigned long> &files);
   int readfile(inum ino, std::string &buf);
   int writefile(inum ino, std::string &buf);
+  int unlink(inum parentnum, const char *filename);
 };
 
 #endif 
