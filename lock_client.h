@@ -20,5 +20,14 @@ class lock_client {
   virtual lock_protocol::status stat(lock_protocol::lockid_t);
 };
 
+class unique_lock_client {
+public:
+    unique_lock_client(lock_client *l, lock_protocol::lockid_t lid);
+    ~unique_lock_client() {};
+private:
+    lock_client* l;
+    lock_protocol::lockid_t lid;
+};
+
 
 #endif 
