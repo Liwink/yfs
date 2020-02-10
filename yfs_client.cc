@@ -15,7 +15,8 @@
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
   ec = new extent_client(extent_dst);
-
+  lc = new lock_client(lock_dst);
+  srandom(getpid());
 }
 
 yfs_client::inum
@@ -50,8 +51,28 @@ yfs_client::isdir(inum inum)
 }
 
 int
+yfs_client::readexpendfile(inum ino, std::string &buf, size_t size)
+{
+  // it's for seek out-of-range
+  auto l = unique_lock_client(lc, ino);
+  if (ec->get(ino, buf) != extent_protocol::OK) {
+    return IOERR;
+  }
+
+  // FIXME: HACK: Sooooo wield! It's for out-of-range seek on MacOS
+  if (size > buf.size()) {
+    buf.append(std::string(size - buf.size(), '\0'));
+    if (ec->put(ino, buf) != extent_protocol::OK) {
+      return IOERR;
+    }
+  }
+  return OK;
+}
+
+int
 yfs_client::readfile(inum ino, std::string &buf)
 {
+  auto l = unique_lock_client(lc, ino);
   if (ec->get(ino, buf) != extent_protocol::OK) {
       return IOERR;
   }
@@ -61,6 +82,7 @@ yfs_client::readfile(inum ino, std::string &buf)
 int
 yfs_client::writefile(inum ino, std::string &buf)
 {
+  auto l = unique_lock_client(lc, ino);
   if (ec->put(ino, buf) != extent_protocol::OK) {
       return IOERR;
   }
@@ -146,6 +168,8 @@ dirunlinkfile(std::string &dir, const char *filename)
 void
 yfs_client::readdir(inum parent, std::unordered_map<std::string, unsigned long> &files)
 {
+  auto l = unique_lock_client(lc, parent);
+
   std::string buf;
   if (ec->get(parent, buf) != extent_protocol::OK) {
     return;
@@ -167,6 +191,8 @@ diraddfile(std::string &dir, const char *filename, yfs_client::inum ino)
 unsigned long
 yfs_client::lookup(inum parentnum, const char *filename)
 {
+  auto l = unique_lock_client(lc, parentnum);
+
   std::string buf;
   if (ec->get(parentnum, buf) != extent_protocol::OK) {
     return 0;
@@ -183,6 +209,8 @@ yfs_client::unlink(inum parentnum, const char *filename)
   // 1. find the ino
   // 2. remove file from dir
   // 3. remove from extend_server
+
+  auto l = unique_lock_client(lc, parentnum);
 
   std::string buf;
   if (ec->get(parentnum, buf) != extent_protocol::OK) {
@@ -210,6 +238,7 @@ yfs_client::createfile(inum parentnum, const char *filename,
 {
   std::cout << "createfile: " << parentnum << ", " << filename << std::endl;
 
+  auto l = unique_lock_client(lc, parentnum);
   std::string buf;
   if (ec->get(parentnum, buf) != extent_protocol::OK) {
     if (parentnum == 1) {

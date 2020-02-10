@@ -23,7 +23,7 @@ class lock_client {
 class unique_lock_client {
 public:
     unique_lock_client(lock_client *l, lock_protocol::lockid_t lid);
-    ~unique_lock_client() {};
+    ~unique_lock_client();
 private:
     lock_client* l;
     lock_protocol::lockid_t lid;

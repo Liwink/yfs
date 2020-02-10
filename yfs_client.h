@@ -4,6 +4,7 @@
 #include <string>
 //#include "yfs_protocol.h"
 #include "extent_client.h"
+#include "lock_client.h"
 #include <vector>
 #include <unordered_map>
 
@@ -12,6 +13,7 @@
 
 class yfs_client {
   extent_client *ec;
+  lock_client *lc;
  public:
 
   typedef unsigned long long inum;
@@ -50,6 +52,7 @@ class yfs_client {
   int createfile(inum, const char*, unsigned long&, bool);
   unsigned long lookup(inum parentnum, const char *filename);
   void readdir(inum parent, std::unordered_map<std::string, unsigned long> &files);
+  int readexpendfile(inum ino, std::string &buf, size_t size);
   int readfile(inum ino, std::string &buf);
   int writefile(inum ino, std::string &buf);
   int unlink(inum parentnum, const char *filename);

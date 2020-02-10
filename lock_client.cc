@@ -50,7 +50,7 @@ lock_client::release(lock_protocol::lockid_t lid)
 unique_lock_client::unique_lock_client(lock_client *l, lock_protocol::lockid_t lid)
 : l(l), lid(lid)
 {
-  l->release(lid);
+  l->acquire(lid);
 }
 
 unique_lock_client::~unique_lock_client() {
