@@ -192,23 +192,9 @@ fuseserver_write(fuse_req_t req, fuse_ino_t ino,
                  struct fuse_file_info *fi)
 {
   // You fill this in for Lab 2
-  std::string doc;
-
   printf("fuseserver_write-  buf: %s, off: %lld, size: %ld\n", buf, off, size);
 
-  yfs->readfile(ino, doc);
-
-  std::cout << "old doc: " << doc << std::endl;
-
-  if (off >= doc.size()) {
-      doc.append(std::string(doc.size() - off + 1, '\0'));
-  }
-
-  doc.replace(doc.begin() + off, doc.begin() + off + size, buf, size);
-
-  std::cout << "new doc: " << doc << std::endl;
-
-  yfs->writefile(ino, doc);
+  yfs->writefile(ino, buf, size, off);
 
 //  fuse_reply_write(req, size);
   fuse_reply_write(req, size);

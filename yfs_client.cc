@@ -80,11 +80,38 @@ yfs_client::readfile(inum ino, std::string &buf)
 }
 
 int
+yfs_client::writefile(inum ino, const char *buf, size_t size, off_t off)
+{
+  auto l = unique_lock_client(lc, ino);
+
+  std::string doc;
+  if (ec->get(ino, doc) != extent_protocol::OK) {
+    return IOERR;
+  }
+
+  std::cout << "old doc: " << doc << std::endl;
+
+  if (off >= doc.size()) {
+    doc.append(std::string(doc.size() - off + 1, '\0'));
+  }
+
+  doc.replace(doc.begin() + off, doc.begin() + off + size, buf, size);
+
+  std::cout << "new doc: " << doc << std::endl;
+
+  if (ec->put(ino, doc) != extent_protocol::OK) {
+      return IOERR;
+  }
+  return OK;
+}
+
+int
 yfs_client::writefile(inum ino, std::string &buf)
 {
   auto l = unique_lock_client(lc, ino);
+
   if (ec->put(ino, buf) != extent_protocol::OK) {
-      return IOERR;
+    return IOERR;
   }
   return OK;
 }

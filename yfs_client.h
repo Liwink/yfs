@@ -55,6 +55,7 @@ class yfs_client {
   int readexpendfile(inum ino, std::string &buf, size_t size);
   int readfile(inum ino, std::string &buf);
   int writefile(inum ino, std::string &buf);
+  int writefile(inum ino, const char *buf, size_t size, off_t off);
   int unlink(inum parentnum, const char *filename);
 };
 
