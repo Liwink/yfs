@@ -49,7 +49,7 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
         cond.wait(l);
         waiting[lid]--;
     } else {
-      auto ret = cl->call(lock_protocol::acquire, lid);
+      auto ret = cl->call(lock_protocol::acquire, lid, id);
       if (ret == lock_protocol::OK) {
         available[lid] = false;
       } else if (ret == lock_protocol::RETRY){
@@ -66,7 +66,7 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 lock_protocol::status
 lock_client_cache::_release(lock_protocol::lockid_t lid)
 {
-  auto ret = cl->call(lock_protocol::release, lid);
+  auto ret = cl->call(lock_protocol::release, lid, id);
   if (ret != lock_protocol::OK) return ret;
   available.erase(lid);
   revoke.erase(lid);

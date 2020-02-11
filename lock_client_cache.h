@@ -31,7 +31,7 @@ class lock_client_cache : public lock_client {
   std::condition_variable cond;
   std::unordered_map<lock_protocol::lockid_t, bool> available;
   std::unordered_map<lock_protocol::lockid_t, int> waiting;
-  std::unordered_set<lock_protocol::lockid_t, int> revoke;
+  std::unordered_set<lock_protocol::lockid_t> revoke;
 
   lock_protocol::status _release(lock_protocol::lockid_t);
  public:
