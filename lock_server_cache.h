@@ -18,6 +18,7 @@ class lock_server_cache {
   std::condition_variable cond;
   std::unordered_map<lock_protocol::lockid_t, std::unordered_set<std::string> > waiting;
   std::unordered_map<std::string, std::unique_ptr<rpcc> > clients;
+  void init_client(std::string id);
  public:
   lock_server_cache();
   lock_protocol::status stat(lock_protocol::lockid_t, int &);

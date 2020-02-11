@@ -40,6 +40,8 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
   // todo: provide local port to server
   // todo: fine-grained lock and cond
   std::unique_lock<std::mutex> l(m);
+  // if r == 1, to release lid immediately
+  int r;
   while (true) {
     if (available.find(lid) != available.end()) {
         if (available[lid]) {
@@ -49,9 +51,10 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
         cond.wait(l);
         waiting[lid]--;
     } else {
-      auto ret = cl->call(lock_protocol::acquire, lid, id);
+      auto ret = cl->call(lock_protocol::acquire, lid, id, r);
+//      printf("ret: %d\n", ret);
       if (ret == lock_protocol::OK) {
-        available[lid] = false;
+        available[lid] = true;
       } else if (ret == lock_protocol::RETRY){
         cond.wait(l);
       } else {
@@ -60,13 +63,16 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
     }
   }
   available[lid] = false;
+  if (r == 1)
+    revoke.insert(lid);
   return lock_protocol::OK;
 }
 
 lock_protocol::status
 lock_client_cache::_release(lock_protocol::lockid_t lid)
 {
-  auto ret = cl->call(lock_protocol::release, lid, id);
+  int r;
+  auto ret = cl->call(lock_protocol::release, lid, id, r);
   if (ret != lock_protocol::OK) return ret;
   available.erase(lid);
   revoke.erase(lid);
@@ -96,13 +102,14 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
                                   int &)
 {
   std::unique_lock<std::mutex> l(m);
+  printf("revoke %lld\n", lid);
   if (available.find(lid) != available.end()) {
     if (waiting[lid] == 0 && available[lid]) {
       // fixme: potential deadlock
       return _release(lid);
     }
-    revoke.insert(lid);
   }
+  revoke.insert(lid);
   int ret = rlock_protocol::OK;
   return ret;
 }
@@ -112,6 +119,7 @@ lock_client_cache::retry_handler(lock_protocol::lockid_t lid,
                                  int &)
 {
   std::unique_lock<std::mutex> l(m);
+  printf("retry %lld\n", lid);
   cond.notify_all();
   int ret = rlock_protocol::OK;
   return ret;
