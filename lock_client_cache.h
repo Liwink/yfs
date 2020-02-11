@@ -5,6 +5,8 @@
 #define lock_client_cache_h
 
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include "lock_protocol.h"
 #include "rpc.h"
 #include "lock_client.h"
@@ -25,6 +27,13 @@ class lock_client_cache : public lock_client {
   int rlock_port;
   std::string hostname;
   std::string id;
+  std::mutex m;
+  std::condition_variable cond;
+  std::unordered_map<lock_protocol::lockid_t, bool> available;
+  std::unordered_map<lock_protocol::lockid_t, int> waiting;
+  std::unordered_set<lock_protocol::lockid_t, int> revoke;
+
+  lock_protocol::status _release(lock_protocol::lockid_t);
  public:
   lock_client_cache(std::string xdst, class lock_release_user *l = 0);
   virtual ~lock_client_cache() {};
