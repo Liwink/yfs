@@ -42,6 +42,7 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
   std::unique_lock<std::mutex> l(m);
   // if r == 1, to release lid immediately
   int r;
+  printf("client acquire: %s\n", id.c_str());
   while (true) {
     if (available.find(lid) != available.end()) {
         if (available[lid]) {
@@ -51,12 +52,19 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
         cond.wait(l);
         waiting[lid]--;
     } else {
+//      l.mutex()->unlock();
       auto ret = cl->call(lock_protocol::acquire, lid, id, r);
+//      l.mutex()->lock();
+
 //      printf("ret: %d\n", ret);
       if (ret == lock_protocol::OK) {
         available[lid] = true;
       } else if (ret == lock_protocol::RETRY){
-        cond.wait(l);
+        while (retry.find(lid) == retry.end()) {
+          printf("wait %s\n", id.c_str());
+          cond.wait(l);
+        }
+        retry.erase(lid);
       } else {
         return ret;
       }
@@ -71,6 +79,8 @@ lock_client_cache::acquire(lock_protocol::lockid_t lid)
 lock_protocol::status
 lock_client_cache::_release(lock_protocol::lockid_t lid)
 {
+  // fixme: potential deadlock
+  // fixme: order
   int r;
   auto ret = cl->call(lock_protocol::release, lid, id, r);
   if (ret != lock_protocol::OK) return ret;
@@ -86,6 +96,7 @@ lock_client_cache::release(lock_protocol::lockid_t lid)
   // 2. if other threads are waiting -> notify
   // 3. else if revoked, release
   std::unique_lock<std::mutex> l(m);
+  printf("client release: %s\n", id.c_str());
   available[lid] = true;
   if (waiting[lid] > 0) {
     cond.notify_all();
@@ -102,10 +113,9 @@ lock_client_cache::revoke_handler(lock_protocol::lockid_t lid,
                                   int &)
 {
   std::unique_lock<std::mutex> l(m);
-  printf("revoke %lld\n", lid);
+  printf("revoke %s\n", id.c_str());
   if (available.find(lid) != available.end()) {
     if (waiting[lid] == 0 && available[lid]) {
-      // fixme: potential deadlock
       return _release(lid);
     }
   }
@@ -118,8 +128,13 @@ rlock_protocol::status
 lock_client_cache::retry_handler(lock_protocol::lockid_t lid, 
                                  int &)
 {
+  printf("pre retry %s\n", id.c_str());
   std::unique_lock<std::mutex> l(m);
-  printf("retry %lld\n", lid);
+  // XXX: How do you handle a retry showing up on the client
+  // before the response on the corresponding acquire?
+  printf("retry %s\n", id.c_str());
+
+  retry.insert(lid);
   cond.notify_all();
   int ret = rlock_protocol::OK;
   return ret;

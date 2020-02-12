@@ -4,14 +4,18 @@
 #include <sstream>
 #include <stdio.h>
 #include <unistd.h>
+#include <thread>
 #include <arpa/inet.h>
 #include "lang/verify.h"
 #include "handle.h"
 #include "tprintf.h"
 
 
-lock_server_cache::lock_server_cache()
+lock_server_cache::lock_server_cache() : is_close(false)
 {
+  // todo: to quit background threads when the obj is destructed
+  revoke_worker = new std::thread (&lock_server_cache::revoke_background, this);
+  retry_worker = new std::thread (&lock_server_cache::retry_background, this);
 }
 
 void lock_server_cache::init_client(std::string id)
@@ -19,12 +23,49 @@ void lock_server_cache::init_client(std::string id)
   if (clients.find(id) == clients.end()) {
     sockaddr_in csock;
     make_sockaddr(id.c_str(), &csock);
-    clients[id] = std::make_unique<rpcc>(csock);
+    clients[id] = std::make_shared<rpcc>(csock);
     if (clients[id]->bind() < 0) {
       printf("lock_server: call bind %s\n", id.c_str());
     }
   }
 }
+
+void lock_server_cache::revoke_background()
+{
+  std::unique_lock<std::mutex> l(m);
+  printf("revoke_background running\n");
+  int r;
+  while (true) {
+    if (is_close) return;
+    while (to_revoke.empty()) {
+      cond.wait(l);
+    }
+    auto item = to_revoke.begin();
+    to_revoke.erase(item);
+    init_client(item->first);
+    printf("revoke %lld to clt %s\n", item->second, item->first.c_str());
+    clients[item->first]->call(rlock_protocol::revoke, item->second, r);
+  }
+}
+
+void lock_server_cache::retry_background()
+{
+  std::unique_lock<std::mutex> l(m);
+  printf("retry_background running\n");
+  int r;
+  while (true) {
+    if (is_close) return;
+    while (to_retry.empty()) {
+      cond.wait(l);
+    }
+    auto item = to_retry.begin();
+    to_retry.erase(item);
+    init_client(item->first);
+    printf("retry %lld to clt %s\n", item->second, item->first.c_str());
+    clients[item->first]->call(rlock_protocol::retry, item->second, r);
+  }
+}
+
 
 int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
                                int &r)
@@ -42,15 +83,13 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
     waiting[lid].erase(id);
     // to invoke
     r = 1;
+    printf("acquire done\n");
     return lock_protocol::OK;
   } else {
     // NOTE: here we do not wait
-    int r;
     waiting[lid].insert(id);
-    init_client(locked[lid]);
-    // todo: client!
-    printf("revoke %lld to clt %s\n", lid, locked[lid].c_str());
-    clients[locked[lid]]->call(rlock_protocol::revoke, lid, r);
+    to_revoke.insert(std::make_pair(locked[lid], lid));
+    printf("RETRY done\n");
     return lock_protocol::RETRY;
   }
 }
@@ -62,18 +101,15 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
   std::unique_lock<std::mutex> l(m);
   printf("release %lld request from clt %s\n", lid, id.c_str());
 
-  if (locked.find(lid) == locked.end() || locked[lid] != id)
-    return lock_protocol::OK;
+//  if (locked.find(lid) == locked.end() || locked[lid] != id)
+//    return lock_protocol::OK;
 
   printf("size: %d\n", waiting[lid].size());
   locked.erase(lid);
   if (!waiting[lid].empty()) {
-    int r;
-    printf("retry %lld to clt %s\n", lid, waiting[lid].begin()->c_str());
-    auto wid = *waiting[lid].begin();
-    init_client(wid);
-    clients[wid]->call(rlock_protocol::retry, lid, r);
+    to_revoke.insert(std::make_pair(*waiting[lid].begin(), lid));
   }
+  printf("release done\n");
   return lock_protocol::OK;
 }
 

@@ -32,6 +32,7 @@ class lock_client_cache : public lock_client {
   std::unordered_map<lock_protocol::lockid_t, bool> available;
   std::unordered_map<lock_protocol::lockid_t, int> waiting;
   std::unordered_set<lock_protocol::lockid_t> revoke;
+  std::unordered_set<lock_protocol::lockid_t> retry;
 
   lock_protocol::status _release(lock_protocol::lockid_t);
  public:
