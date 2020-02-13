@@ -32,10 +32,13 @@ class lock_server_cache {
   std::unordered_map<std::string, std::shared_ptr<rpcc> > clients;
 
   bool is_close;
+  std::mutex m_bg;
   std::unordered_set<std::pair<std::string, lock_protocol::lockid_t>, pair_hash> to_revoke;
   std::unordered_set<std::pair<std::string, lock_protocol::lockid_t>, pair_hash> to_retry;
-  std::thread *revoke_worker;
-  std::thread *retry_worker;
+  std::thread *worker_revoke;
+  std::thread *worker_retry;
+  std::condition_variable cond_revoke;
+  std::condition_variable cond_retry;
 
   void init_client(std::string id);
   void revoke_background();

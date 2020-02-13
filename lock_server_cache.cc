@@ -14,8 +14,8 @@
 lock_server_cache::lock_server_cache() : is_close(false)
 {
   // todo: to quit background threads when the obj is destructed
-  revoke_worker = new std::thread (&lock_server_cache::revoke_background, this);
-  retry_worker = new std::thread (&lock_server_cache::retry_background, this);
+  worker_revoke = new std::thread (&lock_server_cache::revoke_background, this);
+  worker_retry = new std::thread (&lock_server_cache::retry_background, this);
 }
 
 void lock_server_cache::init_client(std::string id)
@@ -38,13 +38,15 @@ void lock_server_cache::revoke_background()
   while (true) {
     if (is_close) return;
     while (to_revoke.empty()) {
-      cond.wait(l);
+      cond_revoke.wait(l);
     }
     auto item = to_revoke.begin();
-    to_revoke.erase(item);
     init_client(item->first);
     printf("revoke %lld to clt %s\n", item->second, item->first.c_str());
+    l.mutex()->unlock();
     clients[item->first]->call(rlock_protocol::revoke, item->second, r);
+    l.mutex()->lock();
+    to_revoke.erase(item);
   }
 }
 
@@ -56,13 +58,15 @@ void lock_server_cache::retry_background()
   while (true) {
     if (is_close) return;
     while (to_retry.empty()) {
-      cond.wait(l);
+      cond_retry.wait(l);
     }
     auto item = to_retry.begin();
-    to_retry.erase(item);
     init_client(item->first);
     printf("retry %lld to clt %s\n", item->second, item->first.c_str());
+    l.mutex()->unlock();
     clients[item->first]->call(rlock_protocol::retry, item->second, r);
+    l.mutex()->lock();
+    to_retry.erase(item);
   }
 }
 
@@ -89,6 +93,7 @@ int lock_server_cache::acquire(lock_protocol::lockid_t lid, std::string id,
     // NOTE: here we do not wait
     waiting[lid].insert(id);
     to_revoke.insert(std::make_pair(locked[lid], lid));
+    cond_revoke.notify_all();
     printf("RETRY done\n");
     return lock_protocol::RETRY;
   }
@@ -107,7 +112,8 @@ lock_server_cache::release(lock_protocol::lockid_t lid, std::string id,
   printf("size: %d\n", waiting[lid].size());
   locked.erase(lid);
   if (!waiting[lid].empty()) {
-    to_revoke.insert(std::make_pair(*waiting[lid].begin(), lid));
+    to_retry.insert(std::make_pair(*waiting[lid].begin(), lid));
+    cond_retry.notify_all();
   }
   printf("release done\n");
   return lock_protocol::OK;
