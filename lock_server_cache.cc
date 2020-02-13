@@ -42,11 +42,14 @@ void lock_server_cache::revoke_background()
     }
     auto item = to_revoke.begin();
     init_client(item->first);
-    printf("revoke %lld to clt %s\n", item->second, item->first.c_str());
-    l.mutex()->unlock();
-    clients[item->first]->call(rlock_protocol::revoke, item->second, r);
-    l.mutex()->lock();
+    auto cid = item->first;
+    auto lid = item->second;
     to_revoke.erase(item);
+
+    printf("revoke %lld to clt %s\n", lid, cid.c_str());
+    l.mutex()->unlock();
+    clients[cid]->call(rlock_protocol::revoke, lid, r);
+    l.mutex()->lock();
   }
 }
 
@@ -62,11 +65,14 @@ void lock_server_cache::retry_background()
     }
     auto item = to_retry.begin();
     init_client(item->first);
-    printf("retry %lld to clt %s\n", item->second, item->first.c_str());
-    l.mutex()->unlock();
-    clients[item->first]->call(rlock_protocol::retry, item->second, r);
-    l.mutex()->lock();
+    auto cid = item->first;
+    auto lid = item->second;
     to_retry.erase(item);
+
+    printf("retry %lld to clt %s\n", lid, cid.c_str());
+    l.mutex()->unlock();
+    clients[cid]->call(rlock_protocol::retry, lid, r);
+    l.mutex()->lock();
   }
 }
 
