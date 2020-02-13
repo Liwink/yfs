@@ -103,9 +103,10 @@ test3(void *x)
   for (int j = 0; j < 10; j++) {
     lc[i]->acquire(a);
     check_grant(a);
-    printf ("test3: client %d got lock\n", i);
+    printf ("test3: client %d-%d got lock\n", i, j);
     check_release(a);
     lc[i]->release(a);
+    printf ("test3: client %d-%d release lock\n", i, j);
   }
   return 0;
 }
