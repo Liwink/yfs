@@ -19,8 +19,6 @@ unsigned int time() {
 int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 {
   // You fill this in for Lab 2.
-  std::unique_lock<std::mutex> lock(m);
-
   store[id] = buf;
   extent_protocol::attr a = {
           time(),
@@ -37,8 +35,6 @@ int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 int extent_server::get(extent_protocol::extentid_t id, std::string &buf)
 {
   // You fill this in for Lab 2.
-  std::unique_lock<std::mutex> lock(m);
-
   if (store.find(id) == store.end()) {
     return extent_protocol::NOENT;
   }
@@ -59,8 +55,6 @@ int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr
   // a.atime = 0;
   // a.mtime = 0;
   // a.ctime = 0;
-  std::unique_lock<std::mutex> lock(m);
-
   a = attr_store[id];
   return extent_protocol::OK;
 }
@@ -68,8 +62,6 @@ int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr
 int extent_server::remove(extent_protocol::extentid_t id, int &)
 {
   // You fill this in for Lab 2.
-  std::unique_lock<std::mutex> lock(m);
-
   store.erase(id);
   attr_store.erase(id);
   return extent_protocol::OK;

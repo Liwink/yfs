@@ -20,7 +20,6 @@ class extent_server {
 private:
     std::map<extent_protocol::extentid_t, std::string> store;
     std::map<extent_protocol::extentid_t, extent_protocol::attr> attr_store;
-    std::mutex m;
 };
 
 #endif 
