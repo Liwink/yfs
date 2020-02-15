@@ -12,16 +12,11 @@
 
 extent_server::extent_server() {}
 
-unsigned int time() {
-  return static_cast<unsigned  int>(time(NULL));
-}
-
 int extent_server::put(extent_protocol::extentid_t id, std::string buf, int &)
 {
   // You fill this in for Lab 2.
   store[id] = buf;
 
-  std::cout << "put: " << id << ", " << buf << std::endl;
   return extent_protocol::OK;
 }
 
@@ -48,6 +43,13 @@ int extent_server::getattr(extent_protocol::extentid_t id, extent_protocol::attr
   // a.mtime = 0;
   // a.ctime = 0;
   a = attr_store[id];
+  return extent_protocol::OK;
+}
+
+int extent_server::putattr(extent_protocol::extentid_t id, extent_protocol::attr a, int &)
+{
+  attr_store[id] = a;
+
   return extent_protocol::OK;
 }
 
