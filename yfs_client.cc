@@ -3,6 +3,7 @@
 #include "extent_client.h"
 #include "lock_client.h"
 #include "lock_client_cache.h"
+#include <ctime>
 #include <sstream>
 #include <iostream>
 #include <stdio.h>
@@ -12,135 +13,8 @@
 #include <fcntl.h>
 #include <unordered_map>
 
-
-yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
-{
-  ec = new extent_client(extent_dst);
-  lc = new lock_client_cache(lock_dst);
-//  lc = new lock_client(lock_dst);
-  srandom(getpid());
-}
-
-yfs_client::inum
-yfs_client::n2i(std::string n)
-{
-  std::istringstream ist(n);
-  unsigned long long finum;
-  ist >> finum;
-  return finum;
-}
-
-std::string
-yfs_client::filename(inum inum)
-{
-  std::ostringstream ost;
-  ost << inum;
-  return ost.str();
-}
-
-bool
-yfs_client::isfile(inum inum)
-{
-  if(inum & 0x80000000)
-    return true;
-  return false;
-}
-
-bool
-yfs_client::isdir(inum inum)
-{
-  return ! isfile(inum);
-}
-
-int
-yfs_client::readexpendfile(inum ino, std::string &buf, size_t size)
-{
-  // it's for seek out-of-range
-  auto l = unique_lock_client(lc, ino);
-  if (ec->get(ino, buf) != extent_protocol::OK) {
-    return IOERR;
-  }
-
-  // FIXME: HACK: Sooooo wield! It's for out-of-range seek on MacOS
-  if (size > buf.size()) {
-    buf.append(std::string(size - buf.size(), '\0'));
-    if (ec->put(ino, buf) != extent_protocol::OK) {
-      return IOERR;
-    }
-  }
-  return OK;
-}
-
-int
-yfs_client::readfile(inum ino, std::string &buf)
-{
-  auto l = unique_lock_client(lc, ino);
-  if (ec->get(ino, buf) != extent_protocol::OK) {
-      return IOERR;
-  }
-  return OK;
-}
-
-int
-yfs_client::writefile(inum ino, const char *buf, size_t size, off_t off)
-{
-  auto l = unique_lock_client(lc, ino);
-
-  std::string doc;
-  if (ec->get(ino, doc) != extent_protocol::OK) {
-    return IOERR;
-  }
-
-  std::cout << "old doc: " << doc << std::endl;
-
-  if (off >= doc.size()) {
-    doc.append(std::string(doc.size() - off + 1, '\0'));
-  }
-
-  doc.replace(doc.begin() + off, doc.begin() + off + size, buf, size);
-
-  std::cout << "new doc: " << doc << std::endl;
-
-  if (ec->put(ino, doc) != extent_protocol::OK) {
-      return IOERR;
-  }
-  return OK;
-}
-
-int
-yfs_client::writefile(inum ino, std::string &buf)
-{
-  auto l = unique_lock_client(lc, ino);
-
-  if (ec->put(ino, buf) != extent_protocol::OK) {
-    return IOERR;
-  }
-  return OK;
-}
-
-int
-yfs_client::getfile(inum inum, fileinfo &fin)
-{
-  int r = OK;
-  // You modify this function for Lab 3
-  // - hold and release the file lock
-
-//  printf("getfile %016llx\n", inum);
-  extent_protocol::attr a;
-  if (ec->getattr(inum, a) != extent_protocol::OK) {
-    r = IOERR;
-    goto release;
-  }
-
-  fin.atime = a.atime;
-  fin.mtime = a.mtime;
-  fin.ctime = a.ctime;
-  fin.size = a.size;
-//  printf("getfile %016llx -> sz %llu\n", inum, fin.size);
-
- release:
-
-  return r;
+unsigned int local_time() {
+  return static_cast<unsigned int>(time(NULL));
 }
 
 void
@@ -195,19 +69,6 @@ dirunlinkfile(std::string &dir, const char *filename)
 }
 
 void
-yfs_client::readdir(inum parent, std::unordered_map<std::string, unsigned long> &files)
-{
-  auto l = unique_lock_client(lc, parent);
-
-  std::string buf;
-  if (ec->get(parent, buf) != extent_protocol::OK) {
-    return;
-  }
-
-  parsedir(buf, files);
-}
-
-void
 diraddfile(std::string &dir, const char *filename, yfs_client::inum ino)
 {
   dir.append("<");
@@ -217,66 +78,238 @@ diraddfile(std::string &dir, const char *filename, yfs_client::inum ino)
   dir.append(">");
 }
 
-unsigned long
-yfs_client::lookup(inum parentnum, const char *filename)
+// ------------------- file_cache -------------------
+void
+file_cache::put(std::string buf)
 {
-  auto l = unique_lock_client(lc, parentnum);
+  _buf = std::move(buf);
+  _dirty = true;
+  _attr.atime = time(NULL);
+  _attr.ctime = local_time();
+  _attr.mtime = local_time();
+  _attr.size = _buf.size();
+}
+
+void
+file_cache::get(std::string &buf) {
+  buf = _buf;
+  _attr.atime = local_time();
+};
+
+// ------------------- yfs_client -------------------
+
+yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
+{
+  ec = new extent_client(extent_dst);
+  lc = new lock_client_cache(lock_dst);
+//  lc = new lock_client(lock_dst);
+  srandom(getpid());
+}
+
+yfs_client::inum
+yfs_client::n2i(std::string n)
+{
+  std::istringstream ist(n);
+  unsigned long long finum;
+  ist >> finum;
+  return finum;
+}
+
+std::string
+yfs_client::filename(inum inum)
+{
+  std::ostringstream ost;
+  ost << inum;
+  return ost.str();
+}
+
+bool
+yfs_client::isfile(inum inum)
+{
+  if(inum & 0x80000000)
+    return true;
+  return false;
+}
+
+bool
+yfs_client::isdir(inum inum)
+{
+  return ! isfile(inum);
+}
+
+file_cache *
+yfs_client::_new_cache_file(inum ino)
+{
+  // XXX: caller should hold the lock of ino
+  files[ino] = std::make_unique<file_cache>(ino);
+  file_cache *f = files[ino].get();
+  f->put("");
+  f->lock();
+  return f;
+}
+
+file_cache *
+yfs_client::_cache_file(inum ino)
+{
+  // XXX: caller should hold the lock of ino
+
+  // todo: does it handle a deleted file correctly?
+  if (files.find(ino) == files.end()) {
+    files[ino] = std::make_unique<file_cache>(ino);
+  }
+  file_cache *f = files[ino].get();
+
+  // todo: move this init function to file_cache class
+  if (!f->is_locked()) {
+    while (ec->get(ino, f->_buf) != extent_protocol::OK) {
+      if (ino == 1) break;
+    }
+    while (ec->getattr(ino, f->_attr) != extent_protocol::OK) {
+      if (ino == 1) break;
+    }
+    f->lock();
+  }
+  return f;
+}
+
+int
+yfs_client::readexpendfile(inum ino, std::string &buf, size_t size)
+{
+  // it's for seek out-of-range
+  auto l = unique_lock_client(lc, ino);
+  auto f = _cache_file(ino);
+
+  f->get(buf);
+
+  // FIXME: HACK: Sooooo wield! It's for out-of-range seek on MacOS
+  if (size > buf.size()) {
+    buf.append(std::string(size - buf.size(), '\0'));
+    f->put(buf);
+  }
+  return OK;
+}
+
+int
+yfs_client::readfile(inum ino, std::string &buf)
+{
+  auto l = unique_lock_client(lc, ino);
+  auto f = _cache_file(ino);
+
+  f->get(buf);
+  return OK;
+}
+
+int
+yfs_client::writefile(inum ino, const char *buf, size_t size, off_t off)
+{
+  auto l = unique_lock_client(lc, ino);
+  auto f = _cache_file(ino);
+
+  std::string doc;
+  f->get(doc);
+  std::cout << "old doc: " << doc << std::endl;
+  if (off >= doc.size()) {
+    doc.append(std::string(doc.size() - off + 1, '\0'));
+  }
+  doc.replace(doc.begin() + off, doc.begin() + off + size, buf, size);
+  std::cout << "new doc: " << doc << std::endl;
+
+  f->put(doc);
+  return OK;
+}
+
+int
+yfs_client::writefile(inum ino, std::string &buf)
+{
+  auto l = unique_lock_client(lc, ino);
+  auto f = _cache_file(ino);
+
+  f->put(buf);
+  return OK;
+}
+
+int
+yfs_client::getfile(inum ino, fileinfo &fin)
+{
+  int r = OK;
+  // You modify this function for Lab 3
+  // - hold and release the file lock
+  printf("getfile\n");
+
+  auto l = unique_lock_client(lc, ino);
+  auto f = _cache_file(ino);
+
+  extent_protocol::attr a = f->getattr();
+  fin.atime = a.atime;
+  fin.mtime = a.mtime;
+  fin.ctime = a.ctime;
+  fin.size = a.size;
+
+  return r;
+}
+
+void
+yfs_client::readdir(inum parent, std::unordered_map<std::string, unsigned long> &files)
+{
+  auto l = unique_lock_client(lc, parent);
+  auto f = _cache_file(parent);
 
   std::string buf;
-  if (ec->get(parentnum, buf) != extent_protocol::OK) {
-    return 0;
-  }
+  f->get(buf);
+
+  parsedir(buf, files);
+}
+
+unsigned long
+yfs_client::lookup(inum parent, const char *filename)
+{
+  auto l = unique_lock_client(lc, parent);
+  auto f = _cache_file(parent);
+
+  std::string buf;
+  f->get(buf);
 
   return dircontainfile(buf, filename);
 }
 
 int
-yfs_client::unlink(inum parentnum, const char *filename)
+yfs_client::unlink(inum parent, const char *filename)
 {
-  std::cout << "unlink: " << parentnum << ", " << filename << std::endl;
+  std::cout << "unlink: " << parent << ", " << filename << std::endl;
 
   // 1. find the ino
   // 2. remove file from dir
   // 3. remove from extend_server
 
-  auto l = unique_lock_client(lc, parentnum);
+  auto l = unique_lock_client(lc, parent);
+  auto p = _cache_file(parent);
 
+  // update the p->buf: removed the file
   std::string buf;
-  if (ec->get(parentnum, buf) != extent_protocol::OK) {
-    return IOERR;
-  }
-
+  p->get(buf);
   auto ino = dirunlinkfile(buf, filename);
   if (ino == 0) {
     return ENOSYS;
   }
-  if (ec->put(parentnum, buf) != extent_protocol::OK) {
-    return IOERR;
-  }
+  p->put(buf);
 
-  if (ec->remove(ino) != extent_protocol::OK) {
-    return IOERR;
-  }
+  auto lf = unique_lock_client(lc, ino);
+  auto f = _cache_file(ino);
+  f->remove();
 
   return OK;
 }
 
 int
-yfs_client::createfile(inum parentnum, const char *filename,
+yfs_client::createfile(inum parent, const char *filename,
         unsigned long &filenum, bool isdir)
 {
-  std::cout << "createfile: " << parentnum << ", " << filename << std::endl;
+  std::cout << "createfile: " << parent << ", " << filename << std::endl;
+  auto l = unique_lock_client(lc, parent);
+  auto p = _cache_file(parent);
 
-  auto l = unique_lock_client(lc, parentnum);
   std::string buf;
-  if (ec->get(parentnum, buf) != extent_protocol::OK) {
-    if (parentnum == 1) {
-      buf = "";
-    } else {
-      return IOERR;
-    }
-  }
-
+  p->get(buf);
   if (dircontainfile(buf, filename) != 0) {
     return EXIST;
   }
@@ -292,9 +325,11 @@ yfs_client::createfile(inum parentnum, const char *filename,
   filenum = static_cast<unsigned long>(ino);
 
   diraddfile(buf, filename, ino);
+  p->put(buf);
 
-  ec->put(parentnum, buf);
-  ec->put(ino, "");
+  // todo: create a function to create file
+  auto lf = unique_lock_client(lc, ino);
+  auto f = _new_cache_file(ino);
 
   return OK;
 }
@@ -302,21 +337,21 @@ yfs_client::createfile(inum parentnum, const char *filename,
 int
 yfs_client::getdir(inum inum, dirinfo &din)
 {
+    printf("1\n");
+  auto l = unique_lock_client(lc, inum);
+    printf("2\n");
+  auto f = _cache_file(inum);
+    printf("3\n");
   int r = OK;
   // You modify this function for Lab 3
   // - hold and release the directory lock
 
 //  printf("getdir %016llx\n", inum);
-  extent_protocol::attr a;
-  if (ec->getattr(inum, a) != extent_protocol::OK) {
-    r = IOERR;
-    goto release;
-  }
+  extent_protocol::attr a = f->getattr();
   din.atime = a.atime;
   din.mtime = a.mtime;
   din.ctime = a.ctime;
 
- release:
   return r;
 }
 
