@@ -79,6 +79,8 @@ lock_client_cache::_release(lock_protocol::lockid_t lid)
   // fixme: potential deadlock
   // fixme: order
   int r;
+  // upload cache before release lock
+  lu->dorelease(lid);
   auto ret = cl->call(lock_protocol::release, lid, id, r);
   if (ret != lock_protocol::OK) return ret;
   available.erase(lid);

@@ -10,6 +10,7 @@
 
 #include "lock_protocol.h"
 #include "lock_client.h"
+#include "lock_client_cache.h"
 
 
 class file_cache;
@@ -17,6 +18,7 @@ class file_cache;
 class yfs_client {
   extent_client *ec;
   lock_client *lc;
+  lock_release_user *lu;
  public:
 
   typedef unsigned long long inum;
@@ -64,6 +66,8 @@ class yfs_client {
   int writefile(inum ino, const char *buf, size_t size, off_t off);
   int unlink(inum parentnum, const char *filename);
 
+  void flush(lock_protocol::lockid_t lid);
+
   file_cache* _cache_file(inum ino);
   file_cache* _new_cache_file(inum ino);
 };
@@ -93,6 +97,18 @@ private:
     bool _deleted;
 
     friend yfs_client;
+
+};
+
+class lock_release_yfs : public lock_release_user {
+public:
+    lock_release_yfs(yfs_client* yfs) : _yfs(yfs) {};
+    void dorelease(lock_protocol::lockid_t lid) {
+        _yfs->flush(lid);
+    }
+
+private:
+    yfs_client* _yfs;
 
 };
 

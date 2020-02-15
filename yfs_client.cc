@@ -101,7 +101,8 @@ file_cache::get(std::string &buf) {
 yfs_client::yfs_client(std::string extent_dst, std::string lock_dst)
 {
   ec = new extent_client(extent_dst);
-  lc = new lock_client_cache(lock_dst);
+  lu = new lock_release_yfs(this);
+  lc = new lock_client_cache(lock_dst, lu);
 //  lc = new lock_client(lock_dst);
   srandom(getpid());
 }
@@ -337,11 +338,8 @@ yfs_client::createfile(inum parent, const char *filename,
 int
 yfs_client::getdir(inum inum, dirinfo &din)
 {
-    printf("1\n");
   auto l = unique_lock_client(lc, inum);
-    printf("2\n");
   auto f = _cache_file(inum);
-    printf("3\n");
   int r = OK;
   // You modify this function for Lab 3
   // - hold and release the directory lock
@@ -353,6 +351,26 @@ yfs_client::getdir(inum inum, dirinfo &din)
   din.ctime = a.ctime;
 
   return r;
+}
+
+void
+yfs_client::flush(lock_protocol::lockid_t lid)
+{
+  if (files.find(lid) == files.end()) {
+    return;
+  }
+  if (files[lid]->is_deleted()) {
+    ec->remove(lid);
+    return;
+  }
+  if (files[lid]->is_dirty()) {
+    std::string buf;
+    files[lid]->get(buf);
+    ec->put(lid, buf);
+  }
+  ec->putattr(lid, files[lid]->getattr());
+
+  files.erase(lid);
 }
 
 
