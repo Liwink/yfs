@@ -14,6 +14,7 @@
 // paxos_commit to inform higher layers of the agreed value for this
 // instance.
 
+const rpcc::TO to_min = { 1000 };
 
 bool
 operator> (const prop_t &a, const prop_t &b)
@@ -95,6 +96,8 @@ proposer::run(int instance, std::vector<std::string> cur_nodes, std::string newv
   std::string v;
   bool r = false;
 
+  printf("run %d, %s\n", instance, newv.c_str());
+
   ScopedLock ml(&pxs_mutex);
   tprintf("start: initiate paxos for %s w. i=%d v=%s stable=%d\n",
 	 print_members(cur_nodes).c_str(), instance, newv.c_str(), stable);
@@ -147,7 +150,7 @@ proposer::init_client(std::string id)
     sockaddr_in csock;
     make_sockaddr(id.c_str(), &csock);
     clients[id] = std::make_shared<rpcc>(csock);
-    if (clients[id]->bind() < 0) {
+    if (clients[id]->bind(to_min) < 0) {
       tprintf("lock_server: call bind %s\n", id.c_str());
     }
   }
@@ -179,8 +182,8 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
     init_client(node);
 
 
-    printf("preparereq %s\n", node.c_str());
-    clients[node]->call(paxos_protocol::preparereq, src, a, r);
+    printf("preparereq %s %s\n", node.c_str(), v.c_str());
+    clients[node]->call(paxos_protocol::preparereq, src, a, r, to_min);
     printf("done preparereq %s\n", node.c_str());
     if (r.accept) {
       accepts.push_back(node);
@@ -206,7 +209,7 @@ proposer::accept(unsigned instance, std::vector<std::string> &accepts,
   bool r;
   // You fill this in for Lab 6
   for (auto &node: nodes) {
-    clients[node]->call(paxos_protocol::acceptreq, src, a, r);
+    clients[node]->call(paxos_protocol::acceptreq, src, a, r, to_min);
     if (r) accepts.push_back(node);
   }
 }
@@ -223,7 +226,7 @@ proposer::decide(unsigned instance, std::vector<std::string> accepts,
   int r;
   for (auto &node: accepts) {
     // todo: retry?
-    clients[node]->call(paxos_protocol::decidereq, src, a, r);
+    clients[node]->call(paxos_protocol::decidereq, src, a, r, to_min);
   }
 }
 
