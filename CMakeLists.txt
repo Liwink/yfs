@@ -11,6 +11,7 @@ add_library(yfs STATIC rpc/rpc.h rpc/rpc.cc lock_client.cc lock_client.h lock_se
         extent_server.h extent_server.cc extent_smain.cc
         lock_client_cache.cc lock_client_cache.h lock_server_cache.cc lock_server_cache.h
         handle.cc handle.h
+        paxos_protocol.h paxos.cc paxos.h log.cc log.h config.cc config.h rsm.cc rsm.h rsm_protocol.h
         )
 # add_library(sqlite3 STATIC ext/rtree/rtree.c ext/rtree/rtree.h src/vtab.c src/loadext.c)
 # add_library(sqlite3 STATIC ext/rtree/rtree.c ext/rtree/rtree.h src/vtab.c src/vdbe.c src/vdbeapi.c src/where.c

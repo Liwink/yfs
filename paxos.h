@@ -3,6 +3,7 @@
 
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include "rpc.h"
 #include "paxos_protocol.h"
 #include "log.h"
@@ -16,7 +17,7 @@ class paxos_change {
 
 class acceptor {
  private:
-  log *l;
+  class log *l;
   rpcs *pxs;
   paxos_change *cfg;
   std::string me;
@@ -59,12 +60,14 @@ extern std::string print_members(const std::vector<std::string> &nodes);
 
 class proposer {
  private:
-  log *l;
+  class log *l;
   paxos_change *cfg;
   acceptor *acc;
   std::string me;
   bool break1;
   bool break2;
+
+  std::unordered_map<std::string, std::shared_ptr<rpcc> > clients;
 
   pthread_mutex_t pxs_mutex;
 
@@ -84,6 +87,8 @@ class proposer {
   void breakpoint1();
   void breakpoint2();
   bool majority(const std::vector<std::string> &l1, const std::vector<std::string> &l2);
+
+  void init_client(std::string id);
 
   friend class log;
  public:
