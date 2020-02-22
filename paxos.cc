@@ -109,7 +109,9 @@ proposer::run(int instance, std::vector<std::string> cur_nodes, std::string newv
   setn();
   accepts.clear();
   v.clear();
+  printf("cur_nodes size: %ld\n", cur_nodes.size());
   if (prepare(instance, accepts, cur_nodes, v)) {
+    printf("accepts size: %ld\n", cur_nodes.size());
 
     if (majority(cur_nodes, accepts)) {
       tprintf("paxos::manager: received a majority of prepare responses\n");
@@ -150,9 +152,10 @@ proposer::init_client(std::string id)
     sockaddr_in csock;
     make_sockaddr(id.c_str(), &csock);
     clients[id] = std::make_shared<rpcc>(csock);
-    if (clients[id]->bind(to_min) < 0) {
-      tprintf("lock_server: call bind %s\n", id.c_str());
-    }
+  }
+  // reconnection
+  if (clients[id]->bind(to_min) < 0) {
+    tprintf("lock_server: call bind %s\n", id.c_str());
   }
 }
 
@@ -181,6 +184,8 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
   for (std::string &node : nodes) {
     init_client(node);
 
+    r.accept = false;
+    r.oldinstance = false;
 
     printf("preparereq %s %s\n", node.c_str(), v.c_str());
     clients[node]->call(paxos_protocol::preparereq, src, a, r, to_min);
@@ -263,6 +268,7 @@ acceptor::preparereq(std::string src, paxos_protocol::preparearg a,
   // You fill this in for Lab 6
   // Remember to initialize *BOTH* r.accept and r.oldinstance appropriately.
   // Remember to *log* the proposal if the proposal is accepted.
+  printf("instance: %d, arg: %s-%d\n", a.instance, a.n.m.c_str(), a.n.n);
 
   if (a.instance <= instance_h) {
     r.accept = false;
@@ -274,6 +280,8 @@ acceptor::preparereq(std::string src, paxos_protocol::preparearg a,
     r.accept = true;
     r.n_a = n_a;
     r.v_a = v_a;
+
+    l->logprop(n_h);
   } else {
     r.accept = false;
     r.oldinstance = false;
@@ -294,6 +302,8 @@ acceptor::acceptreq(std::string src, paxos_protocol::acceptarg a, bool &r)
     n_a = a.n;
     v_a = a.v;
     r = true;
+
+    l->logaccept(n_a, v_a);
   } else {
     r = false;
   }
