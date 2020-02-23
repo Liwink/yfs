@@ -111,7 +111,7 @@ proposer::run(int instance, std::vector<std::string> cur_nodes, std::string newv
   v.clear();
   printf("cur_nodes size: %ld\n", cur_nodes.size());
   if (prepare(instance, accepts, cur_nodes, v)) {
-    printf("accepts size: %ld\n", cur_nodes.size());
+    printf("accepts size: %ld\n", accepts.size());
 
     if (majority(cur_nodes, accepts)) {
       tprintf("paxos::manager: received a majority of prepare responses\n");
@@ -148,6 +148,9 @@ proposer::run(int instance, std::vector<std::string> cur_nodes, std::string newv
 void
 proposer::init_client(std::string id)
 {
+  // todo: maintain rpc-client connection effectively
+  // if the rpc server restarted, we cannot reuse the old client instance
+  clients.erase(id);
   if (clients.find(id) == clients.end()) {
     sockaddr_in csock;
     make_sockaddr(id.c_str(), &csock);
@@ -188,8 +191,8 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
     r.oldinstance = false;
 
     printf("preparereq %s %s\n", node.c_str(), v.c_str());
-    clients[node]->call(paxos_protocol::preparereq, src, a, r, to_min);
-    printf("done preparereq %s\n", node.c_str());
+    auto res = clients[node]->call(paxos_protocol::preparereq, src, a, r, to_min);
+    printf("done preparereq %s: %d\n", node.c_str(), res);
     if (r.accept) {
       accepts.push_back(node);
     } else if (r.oldinstance) {
