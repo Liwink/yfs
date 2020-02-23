@@ -183,6 +183,9 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
   my_n.n += 1;
   a.n = my_n;
 
+  prop_t pre_n;
+  pre_n.n = -1;
+
   // todo: create a thread for each nodes
   for (std::string &node : nodes) {
     init_client(node);
@@ -195,6 +198,10 @@ proposer::prepare(unsigned instance, std::vector<std::string> &accepts,
     printf("done preparereq %s: %d\n", node.c_str(), res);
     if (r.accept) {
       accepts.push_back(node);
+      if (pre_n.n == -1 || r.n_a > pre_n) {
+        pre_n = r.n_a;
+        v = r.v_a;
+      }
     } else if (r.oldinstance) {
       acc->commit(instance, r.v_a);
       return false;
