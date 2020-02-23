@@ -86,6 +86,7 @@
 #include "rsm.h"
 #include "tprintf.h"
 #include "lang/verify.h"
+#include "rsm_client.h"
 
 static void *
 recoverythread(void *x)
@@ -137,6 +138,12 @@ rsm::rsm(std::string _first, std::string _me)
   }
 }
 
+void
+rsm::reg1(int proc, handler *h)
+{
+  ScopedLock ml(&rsm_mutex);
+  procs[proc] = h;
+}
 
 // The recovery thread runs this function
 void
@@ -152,7 +159,7 @@ rsm::recovery()
         commit_change_wo(cfg->vid());
       } else {
 	VERIFY(pthread_mutex_unlock(&rsm_mutex)==0);
-	sleep (30); // XXX make another node in cfg primary?
+	sleep (5); // XXX make another node in cfg primary?
 	VERIFY(pthread_mutex_lock(&rsm_mutex)==0);
       }
     }
@@ -227,6 +234,29 @@ bool
 rsm::statetransfer(std::string m)
 {
   // Code will be provided in Lab 7
+  rsm_protocol::transferres r;
+  handle h(m);
+  int ret;
+  tprintf("rsm::statetransfer: contact %s w. my last_myvs(%d,%d)\n", 
+	 m.c_str(), last_myvs.vid, last_myvs.seqno);
+  VERIFY(pthread_mutex_unlock(&rsm_mutex)==0);
+  rpcc *cl = h.safebind();
+  if (cl) {
+    ret = cl->call(rsm_protocol::transferreq, cfg->myaddr(), 
+                             last_myvs, vid_insync, r, rpcc::to(1000));
+  }
+  VERIFY(pthread_mutex_lock(&rsm_mutex)==0);
+  if (cl == 0 || ret != rsm_protocol::OK) {
+    tprintf("rsm::statetransfer: couldn't reach %s %lx %d\n", m.c_str(), 
+	   (long unsigned) cl, ret);
+    return false;
+  }
+  if (stf && last_myvs != r.last) {
+    stf->unmarshal_state(r.state);
+  }
+  last_myvs = r.last;
+  tprintf("rsm::statetransfer transfer from %s success, vs(%d,%d)\n", 
+	 m.c_str(), last_myvs.vid, last_myvs.seqno);
   return true;
 }
 
@@ -291,6 +321,21 @@ rsm::commit_change_wo(unsigned vid)
 }
 
 
+void
+rsm::execute(int procno, std::string req, std::string &r)
+{
+  tprintf("execute\n");
+  handler *h = procs[procno];
+  VERIFY(h);
+  unmarshall args(req);
+  marshall rep;
+  std::string reps;
+  rsm_protocol::status ret = h->fn(args, rep);
+  marshall rep1;
+  rep1 << ret;
+  rep1 << rep.str();
+  r = rep1.str();
+}
 
 //
 // Clients call client_invoke to invoke a procedure on the replicated state
@@ -331,6 +376,14 @@ rsm_protocol::transferres &r)
   ScopedLock ml(&rsm_mutex);
   int ret = rsm_protocol::OK;
   // Code will be provided in Lab 7
+  tprintf("transferreq from %s (%d,%d) vs (%d,%d)\n", src.c_str(), 
+	 last.vid, last.seqno, last_myvs.vid, last_myvs.seqno);
+  if (!insync || vid != vid_insync) {
+     return rsm_protocol::BUSY;
+  }
+  if (stf && last != last_myvs) 
+    r.state = stf->marshal_state();
+  r.last = last_myvs;
   return ret;
 }
 
